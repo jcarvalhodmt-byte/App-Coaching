@@ -1,8 +1,8 @@
 /* global __app_id, __initial_auth_token, __firebase_config */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, setDoc, query, updateDoc, deleteDoc, writeBatch, Timestamp, orderBy, limit, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, query, updateDoc, deleteDoc, writeBatch, Timestamp, orderBy, limit, addDoc } from 'firebase/firestore';
 
 // --- BIBLIOTHÈQUE DE GRAPHIQUES ---
 const loadChartJs = () => {
@@ -478,7 +478,6 @@ const ProgramManagerScreen = ({ student, onUpdateProgram, onBack, allStudents, t
     const [coachNotes, setCoachNotes] = useState(student.coachNotes || '');
     const [isSchemaSelectorOpen, setIsSchemaSelectorOpen] = useState(false);
     const [currentFolderIndex, setCurrentFolderIndex] = useState(null);
-    const [isCopySessionModalOpen, setIsCopySessionModalOpen] = useState(false);
     const [availableSessions, setAvailableSessions] = useState([]);
     const [selectedSessionToCopy, setSelectedSessionToCopy] = useState('');
 
@@ -590,7 +589,7 @@ const ProgramManagerScreen = ({ student, onUpdateProgram, onBack, allStudents, t
         updatedProgram.folders[currentFolderIndex].sessions.push(sessionToCopy);
         setProgram(updatedProgram);
 
-        setIsCopySessionModalOpen(false);
+        setIsSchemaSelectorOpen(false);
         setSelectedSessionToCopy('');
         setCurrentFolderIndex(null);
     };
@@ -940,7 +939,7 @@ const ProgressionScreen = ({ studentName, history, onBack, t }) => {
                 setChartInstance(newChartInstance);
             });
         }
-    }, [selectedExercise, history, t.maxWeightLifted]);
+    }, [selectedExercise, history, t, chartInstance]);
 
     return (
         <div className="min-h-screen bg-stone-100 p-4 sm:p-8 text-stone-800">
@@ -978,15 +977,15 @@ const WeightTrackingScreen = ({ studentName, onBack, t, studentId, studentsColle
     const [newWeight, setNewWeight] = useState('');
     const weightHistoryPath = `${studentsCollectionPath}/${studentId}/weightHistory`;
 
-    const fetchWeightHistory = async () => {
+    const fetchWeightHistory = useCallback(async () => {
         const q = query(collection(db, weightHistoryPath), orderBy('date', 'asc'));
         const snapshot = await getDocs(q);
         setWeightHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
+    }, [weightHistoryPath]);
 
     useEffect(() => {
         fetchWeightHistory();
-    }, []);
+    }, [fetchWeightHistory]);
 
     useEffect(() => {
         if (weightHistory.length > 0) {
@@ -1009,7 +1008,7 @@ const WeightTrackingScreen = ({ studentName, onBack, t, studentId, studentsColle
                 setChartInstance(newChartInstance);
             });
         }
-    }, [weightHistory]);
+    }, [weightHistory, chartInstance]);
 
     const handleAddWeight = async () => {
         if (newWeight && !isNaN(newWeight)) {
@@ -1083,69 +1082,7 @@ export default function App() {
     const studentsCollectionPath = `/artifacts/${appId}/public/data/students`;
     const lexiconCollectionPath = `/artifacts/${appId}/public/data/exerciseLexicon`;
     
-    useEffect(() => {
-        const initApp = async () => {
-            try {
-                if (!auth.currentUser) {
-                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                    if (token) { await signInWithCustomToken(auth, token); } else { await signInAnonymously(auth); }
-                }
-                
-                const studentsQuery = query(collection(db, studentsCollectionPath));
-                const lexiconQuery = query(collection(db, lexiconCollectionPath));
-
-                const [studentsSnapshot, lexiconSnapshot] = await Promise.all([
-                    getDocs(studentsQuery),
-                    getDocs(lexiconQuery)
-                ]);
-
-                if (studentsSnapshot.empty) {
-                    await seedData();
-                    const newStudentsSnapshot = await getDocs(studentsQuery);
-                    setStudents(newStudentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                } else {
-                    setStudents(studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                }
-
-                if (lexiconSnapshot.empty) {
-                    await seedLexiconData();
-                    const newLexiconSnapshot = await getDocs(lexiconQuery);
-                    setExerciseLexicon(newLexiconSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                } else {
-                    setExerciseLexicon(lexiconSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                }
-
-                setAppState('READY');
-            } catch (error) { 
-                console.error("Erreur d'initialisation de l'application:", error);
-                setAppState('ERROR');
-            }
-        };
-        initApp();
-    }, []);
-    
-    const fetchHistory = async (studentId) => {
-        const historyPath = `${studentsCollectionPath}/${studentId}/trainingHistory`;
-        const q = query(collection(db, historyPath), orderBy('completedAt', 'desc'));
-        const snapshot = await getDocs(q);
-        setTrainingHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    
-    const fetchRecentActivity = async (currentStudents) => {
-        const allActivity = [];
-        for (const student of currentStudents) {
-            const historyPath = `${studentsCollectionPath}/${student.id}/trainingHistory`;
-            const historyQuery = query(collection(db, historyPath), orderBy('completedAt', 'desc'), limit(10));
-            const snapshot = await getDocs(historyQuery);
-            snapshot.forEach(doc => {
-                allActivity.push({ id: doc.id, ...doc.data() });
-            });
-        }
-        allActivity.sort((a, b) => b.completedAt.seconds - a.completedAt.seconds);
-        setRecentActivity(allActivity.slice(0, 10));
-    };
-
-    const seedData = async () => {
+     const seedData = React.useCallback(async () => {
         const batch = writeBatch(db);
         const studentsRef = collection(db, studentsCollectionPath);
     
@@ -1224,8 +1161,9 @@ export default function App() {
         });
     
         await batch.commit();
-    };
-    const seedLexiconData = async () => {
+    }, [studentsCollectionPath]);
+
+    const seedLexiconData = React.useCallback(async () => {
         const demoExercises = [
             { name: "Développé couché", muscleGroup: "Pectoraux", description: "Allongé sur un banc, descendre la barre au niveau de la poitrine et la repousser.", videoUrl: "https://www.instagram.com/p/C5q4Z_gR1gD/" },
             { name: "Squat", muscleGroup: "Jambes", description: "Fléchir les genoux en gardant le dos droit, comme pour s'asseoir sur une chaise.", videoUrl: "https://www.instagram.com/p/C47Xg89rV2v/" },
@@ -1238,7 +1176,69 @@ export default function App() {
         const batch = writeBatch(db);
         demoExercises.forEach(exo => batch.set(doc(collection(db, lexiconCollectionPath)), exo));
         await batch.commit();
+    }, [lexiconCollectionPath]);
+
+    useEffect(() => {
+        const initApp = async () => {
+            try {
+                if (!auth.currentUser) {
+                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                    if (token) { await signInWithCustomToken(auth, token); } else { await signInAnonymously(auth); }
+                }
+                
+                const studentsQuery = query(collection(db, studentsCollectionPath));
+                const lexiconQuery = query(collection(db, lexiconCollectionPath));
+
+                const [studentsSnapshot, lexiconSnapshot] = await Promise.all([
+                    getDocs(studentsQuery),
+                    getDocs(lexiconQuery)
+                ]);
+
+                if (studentsSnapshot.empty) {
+                    await seedData();
+                    const newStudentsSnapshot = await getDocs(studentsQuery);
+                    setStudents(newStudentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                } else {
+                    setStudents(studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                }
+
+                if (lexiconSnapshot.empty) {
+                    await seedLexiconData();
+                    const newLexiconSnapshot = await getDocs(lexiconQuery);
+                    setExerciseLexicon(newLexiconSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                } else {
+                    setExerciseLexicon(lexiconSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                }
+
+                setAppState('READY');
+            } catch (error) { 
+                console.error("Erreur d'initialisation de l'application:", error);
+                setAppState('ERROR');
+            }
+        };
+        initApp();
+    }, [studentsCollectionPath, lexiconCollectionPath, seedData, seedLexiconData]);
+    
+    const fetchHistory = async (studentId) => {
+        const historyPath = `${studentsCollectionPath}/${studentId}/trainingHistory`;
+        const q = query(collection(db, historyPath), orderBy('completedAt', 'desc'));
+        const snapshot = await getDocs(q);
+        setTrainingHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
+    
+    const fetchRecentActivity = useCallback(async (currentStudents) => {
+        const allActivity = [];
+        for (const student of currentStudents) {
+            const historyPath = `${studentsCollectionPath}/${student.id}/trainingHistory`;
+            const historyQuery = query(collection(db, historyPath), orderBy('completedAt', 'desc'), limit(10));
+            const snapshot = await getDocs(historyQuery);
+            snapshot.forEach(doc => {
+                allActivity.push({ id: doc.id, ...doc.data() });
+            });
+        }
+        allActivity.sort((a, b) => b.completedAt.seconds - a.completedAt.seconds);
+        setRecentActivity(allActivity.slice(0, 10));
+    }, [studentsCollectionPath]);
     
     const handleAddStudent = async (name, username, password) => {
         const newStudent = { name, username, password, program: { name: "Nouveau programme", folders: [] } };
@@ -1279,7 +1279,7 @@ export default function App() {
         setCurrentScreen('folderDetail');
     };
 
-    const handleLogin = async (username, password) => {
+    const handleLogin = useCallback(async (username, password) => {
         setLoginError('');
         if ((username === 'admin' && password === 'admin') || (username === 'coach' && password === 'coach')) {
             await fetchRecentActivity(students);
@@ -1296,7 +1296,8 @@ export default function App() {
             setCurrentScreen('dashboard'); 
         } 
         else { setLoginError(t.loginError); }
-    };
+    }, [students, fetchRecentActivity, t.loginError]);
+
     const handleLogout = () => { 
         setSelectedStudent(null); 
         setStudentToManage(null);
