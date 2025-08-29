@@ -119,7 +119,10 @@ const translations = {
 
 
 // --- CONFIGURATION FIREBASE ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// On essaie d'abord de lire la clé depuis Netlify. Si elle n'existe pas, on prend celle de notre environnement de dev.
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+    ? JSON.parse(__firebase_config) 
+    : (process.env.REACT_APP_FIREBASE_CONFIG ? JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG) : {});
 
 // --- INITIALISATION DE FIREBASE ---
 const app = initializeApp(firebaseConfig);
