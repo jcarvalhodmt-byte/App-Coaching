@@ -1,3 +1,4 @@
+/* global __app_id, __initial_auth_token */
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
@@ -118,15 +119,8 @@ const translations = {
 
 
 // --- CONFIGURATION FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyB8paRCKRuxTz6vLDBOsQ0LC3suJWt5CFg",
-  authDomain: "app-coaching-fe622.firebaseapp.com",
-  projectId: "app-coaching-fe622",
-  storageBucket: "app-coaching-fe622.firebasestorage.app",
-  messagingSenderId: "888126724038",
-  appId: "1:888126724038:web:e16162f5a40623c3f4c4c7",
-  measurementId: "G-KX0LYHLZ0Y"
-};
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
 // --- INITIALISATION DE FIREBASE ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -547,7 +541,7 @@ const ProgramManagerScreen = ({ student, onUpdateProgram, onBack, allStudents, t
     
     const openAddSessionModal = (fIndex) => {
         setCurrentFolderIndex(fIndex);
-        setIsCopySessionModalOpen(true);
+        setIsSchemaSelectorOpen(true); 
     };
 
     const addSessionFromSchema = (schema) => {
@@ -644,32 +638,47 @@ const ProgramManagerScreen = ({ student, onUpdateProgram, onBack, allStudents, t
         updated[fIndex].sessions[sIndex].workout.exercises[eIndex].substitution.sets = updated[fIndex].sessions[sIndex].workout.exercises[eIndex].substitution.sets.filter((_, i) => i !== setIndex);
         setProgram({ ...program, folders: updated });
     };
+     const AddSessionModal = ({ onClose, onSchemaSelect, onCopySelect, availableSessions }) => {
+        const [sessionToCopy, setSessionToCopy] = useState('');
+
+        return (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+                <div className="bg-white w-full max-w-md rounded-xl shadow-lg p-6 text-stone-800">
+                    <h3 className="text-2xl font-bold text-amber-600 mb-6 text-center">Ajouter une nouvelle séance</h3>
+                    <div className="space-y-3">
+                        <button onClick={() => onSchemaSelect('force')} className="w-full text-left p-3 bg-stone-100 hover:bg-stone-200 rounded-lg">Modèle Force (4x4)</button>
+                        <button onClick={() => onSchemaSelect('hypertrophy')} className="w-full text-left p-3 bg-stone-100 hover:bg-stone-200 rounded-lg">Modèle Hypertrophie (4x10)</button>
+                        <button onClick={() => onSchemaSelect('crossfit')} className="w-full text-left p-3 bg-stone-100 hover:bg-stone-200 rounded-lg">Modèle CrossFit (AMRAP)</button>
+                    </div>
+                    <div className="border-t my-6"></div>
+                    <div>
+                        <h4 className="text-lg font-semibold mb-2 text-center">Ou copier une séance existante</h4>
+                        <select value={sessionToCopy} onChange={e => setSessionToCopy(e.target.value)} className="w-full p-3 bg-stone-100 border border-stone-300 rounded-lg mb-3">
+                            <option value="">-- Choisir une séance à copier --</option>
+                            {availableSessions.map((s, i) => (
+                                <option key={i} value={JSON.stringify(s)}>{s.displayName}</option>
+                            ))}
+                        </select>
+                        <button onClick={() => onCopySelect(sessionToCopy)} disabled={!sessionToCopy} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg disabled:bg-stone-300">Copier la séance</button>
+                    </div>
+                    <button onClick={onClose} className="w-full mt-6 text-stone-500 hover:text-stone-800">Annuler</button>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <>
-            {(isSchemaSelectorOpen || isCopySessionModalOpen) && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white w-full max-w-md rounded-xl shadow-lg p-6 text-stone-800 text-center">
-                        <h3 className="text-2xl font-bold text-amber-600 mb-4">Ajouter une séance</h3>
-                        
-                        <div className="space-y-4">
-                             <button onClick={() => { setIsCopySessionModalOpen(false); setIsSchemaSelectorOpen(true); }} className="w-full bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold py-3 rounded-lg">Créer à partir d'un modèle</button>
-                            
-                            <div className="border-t pt-4">
-                                <h4 className="text-lg font-semibold mb-2">Ou copier une séance existante</h4>
-                                <select value={selectedSessionToCopy} onChange={(e) => setSelectedSessionToCopy(e.target.value)} className="w-full p-3 bg-stone-100 border border-stone-300 rounded-lg mb-3">
-                                    <option value="">-- Choisir une séance à copier --</option>
-                                    {availableSessions.map((s, i) => (
-                                        <option key={i} value={JSON.stringify(s)}>{s.displayName}</option>
-                                    ))}
-                                </select>
-                                <button onClick={handleCopySession} disabled={!selectedSessionToCopy} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg disabled:bg-stone-300">Copier la séance</button>
-                            </div>
-                        </div>
-
-                        <button onClick={() => {setIsCopySessionModalOpen(false); setIsSchemaSelectorOpen(false);}} className="mt-6 text-stone-500 hover:text-stone-800">Annuler</button>
-                    </div>
-                </div>
+            {isSchemaSelectorOpen && (
+                <AddSessionModal 
+                    onClose={() => setIsSchemaSelectorOpen(false)}
+                    onSchemaSelect={addSessionFromSchema}
+                    onCopySelect={(sessionJSON) => {
+                        setSelectedSessionToCopy(sessionJSON);
+                        handleCopySession();
+                    }}
+                    availableSessions={availableSessions}
+                />
             )}
             <div className="min-h-screen bg-stone-100 p-4 sm:p-8 text-stone-800">
                 <div className="max-w-4xl mx-auto">
@@ -789,20 +798,6 @@ const AdminScreen = ({ students, onAddStudent, onManageStudent, onManageLexicon,
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-md mb-8">
-                    <h2 className="text-2xl font-bold text-amber-600 mb-4">{t.recentActivity}</h2>
-                    <ul className="space-y-3">
-                        {recentActivity.length > 0 ? recentActivity.map(activity => (
-                            <li key={activity.id} className="bg-stone-100 p-4 rounded-lg">
-                                <p><span className="font-bold text-emerald-600">{activity.studentName}</span> a terminé la séance <span className="font-semibold">"{activity.sessionName}"</span>.</p>
-                                <p className="text-sm text-stone-500">{new Date(activity.completedAt.seconds * 1000).toLocaleString('fr-FR')}</p>
-                            </li>
-                        )) : (
-                            <p className="text-stone-500">{t.noRecentActivity}</p>
-                        )}
-                    </ul>
-                </div>
-                
                 <div className="bg-white p-6 rounded-xl shadow-md mb-8">
                     <h2 className="text-2xl font-bold text-amber-600 mb-4">{t.addStudentTitle}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1233,7 +1228,7 @@ export default function App() {
     
     const handleAddStudent = async (name, username, password) => {
         const newStudent = { name, username, password, program: { name: "Nouveau programme", folders: [] } };
-        await setDoc(doc(collection(db, studentsCollectionPath)), newStudent);
+        await addDoc(collection(db, studentsCollectionPath), newStudent);
         const q = query(collection(db, studentsCollectionPath));
         const snapshot = await getDocs(q);
         setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -1246,7 +1241,7 @@ export default function App() {
         setCurrentScreen('admin');
     };
     const handleAddExercise = async (exoData) => {
-        await setDoc(doc(collection(db, lexiconCollectionPath)), exoData);
+        await addDoc(collection(db, lexiconCollectionPath), exoData);
         const q = query(collection(db, lexiconCollectionPath));
         const snapshot = await getDocs(q);
         setExerciseLexicon(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -1265,7 +1260,7 @@ export default function App() {
     };
     const handleCompleteSession = async (sessionData) => {
         const historyPath = `${studentsCollectionPath}/${sessionData.studentId}/trainingHistory`;
-        await setDoc(doc(collection(db, historyPath)), sessionData);
+        await addDoc(collection(db, historyPath), sessionData);
         alert('Séance enregistrée !');
         setCurrentScreen('folderDetail');
     };
@@ -1318,6 +1313,10 @@ export default function App() {
         await fetchHistory(student.id); 
         setCurrentScreen('progression');
     };
+     const handleShowStudentProgression = async (student) => {
+        await fetchHistory(student.id); 
+        setCurrentScreen('studentProgression');
+    };
     const handleShowWeightTracking = (student) => {
         setStudentToManage(student);
         setCurrentScreen('weightTracking');
@@ -1351,7 +1350,7 @@ export default function App() {
             screenToRender = <AdminScreen students={students} onAddStudent={handleAddStudent} onManageStudent={handleManageStudent} onManageLexicon={() => setCurrentScreen('lexiconManager')} onShowHistory={handleShowHistory} onLogout={handleLogout} recentActivity={recentActivity} onShowProgression={handleShowProgression} onShowWeightTracking={handleShowWeightTracking} t={t} setLanguage={setLanguage} />; 
             break;
         case 'dashboard': 
-            screenToRender = selectedStudent ? <DashboardScreen student={selectedStudent} onSelectFolder={handleSelectFolder} onLogout={handleLogout} t={t} setLanguage={setLanguage} onShowProgression={async () => { await fetchHistory(selectedStudent.id); setCurrentScreen('studentProgression'); }} /> : <LoginScreen onLogin={handleLogin} error={loginError} t={t} setLanguage={setLanguage} />; 
+            screenToRender = selectedStudent ? <DashboardScreen student={selectedStudent} onSelectFolder={handleSelectFolder} onLogout={handleLogout} t={t} setLanguage={setLanguage} onShowProgression={() => handleShowStudentProgression(selectedStudent)} /> : <LoginScreen onLogin={handleLogin} error={loginError} t={t} setLanguage={setLanguage} />; 
             break;
         case 'studentProgression':
             screenToRender = <ProgressionScreen studentName={selectedStudent.name} history={trainingHistory} onBack={() => setCurrentScreen('dashboard')} t={t} />;
@@ -1373,3 +1372,4 @@ export default function App() {
         </>
     );
 }
+
