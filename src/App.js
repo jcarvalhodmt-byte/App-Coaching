@@ -1,4 +1,4 @@
-/* global __app_id, __initial_auth_token */
+/* global __app_id, __initial_auth_token, __firebase_config */
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
@@ -798,6 +798,20 @@ const AdminScreen = ({ students, onAddStudent, onManageStudent, onManageLexicon,
                     </div>
                 </div>
 
+                <div className="bg-white p-6 rounded-xl shadow-md mb-8">
+                    <h2 className="text-2xl font-bold text-amber-600 mb-4">{t.recentActivity}</h2>
+                    <ul className="space-y-3">
+                        {recentActivity.length > 0 ? recentActivity.map(activity => (
+                            <li key={activity.id} className="bg-stone-100 p-4 rounded-lg">
+                                <p><span className="font-bold text-emerald-600">{activity.studentName}</span> a terminé la séance <span className="font-semibold">"{activity.sessionName}"</span>.</p>
+                                <p className="text-sm text-stone-500">{new Date(activity.completedAt.seconds * 1000).toLocaleString('fr-FR')}</p>
+                            </li>
+                        )) : (
+                            <p className="text-stone-500">{t.noRecentActivity}</p>
+                        )}
+                    </ul>
+                </div>
+                
                 <div className="bg-white p-6 rounded-xl shadow-md mb-8">
                     <h2 className="text-2xl font-bold text-amber-600 mb-4">{t.addStudentTitle}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
